@@ -19,18 +19,18 @@ int port = 0;
 char message[SIZE];
 
 bool readConf()
-{
+{	
 	bool ret = false;
 
 	FILE *file;
 	char line[SIZE];
 	char key[SIZE];
 	char value[SIZE];
-
-    file = fopen("./conf/conf.txt", "r");
-    if (file == NULL) {
-        printf("fopen() config file failed.\n");
-    }
+	
+	file = fopen("./conf/conf.txt", "r");
+	if (file == NULL) {
+		printf("fopen() config file failed.\n");
+	}
 	else {
 		while (fgets(line, sizeof(line), file) != NULL) {
 			memset(key,0,SIZE); memset(value,0,SIZE); 
