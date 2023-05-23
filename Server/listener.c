@@ -22,10 +22,10 @@ int main(int argc , char *argv[])
 
 	// struct server
 	struct sockaddr_in addrServer;
-    bzero(&addrServer,sizeof(addrServer));
-    addrServer.sin_family = PF_INET;
-    addrServer.sin_addr.s_addr = inet_addr("127.0.0.1");
-    addrServer.sin_port = htons(PORT);
+	bzero(&addrServer,sizeof(addrServer));
+	addrServer.sin_family = PF_INET;
+	addrServer.sin_addr.s_addr = inet_addr("127.0.0.1");
+	addrServer.sin_port = htons(PORT);
 
 	if( bind(sockfd, (struct sockaddr*)&addrServer, sizeof(addrServer) ) == -1)
 	{
