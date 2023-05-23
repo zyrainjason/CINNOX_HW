@@ -1,0 +1,4 @@
+IP = 127.0.0.1
+#TEST = 55688
+PORT = 8887
+MESSAGE = 20230523 test 123456789, show me what you get.
