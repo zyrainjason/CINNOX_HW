@@ -1,6 +1,8 @@
+#include <errno.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h> 
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -10,153 +12,222 @@
 #define SIZE 1024
 
 #define MULTIPLIER 2
-#define BASE_TIME_INTERVAL 500*1000 // 500ms
-#define MAX_TIME_INTERVAL 8*1000*1000 // 8s
+#define BASE_TIME_INTERVAL 500 * 1000     // 500ms
+#define MAX_TIME_INTERVAL 8 * 1000 * 1000 // 8s
+
+int gReturnValue = -1;
+bool gStop = false;
 
 // config parameter
-char ip[SIZE];
-int port = 0;
-char message[SIZE];
+char gIp[SIZE];
+int gPort = 0;
+char gMessage[SIZE];
+int gMaxRetry = 10;
 
 bool readConf()
-{	
-	bool ret = false;
-
-	FILE *file;
-	char line[SIZE];
-	char key[SIZE];
-	char value[SIZE];
-	
-	file = fopen("./conf/conf.txt", "r");
-	if (file == NULL) {
-		printf("fopen() config file failed.\n");
-	}
-	else {
-		while (fgets(line, sizeof(line), file) != NULL) {
-			memset(key,0,SIZE); memset(value,0,SIZE); 
-			if (line[0] == '#' || line[0] == '\0' || line[0] == '\n') {
-				continue;
-			}
-			//printf("config file line: %s\n", line);
-			sscanf(line, "%s = %[^\n]", key, value);
-			//printf("config file key: %s, value: %s\n", key, value);
-
-			if (!strcmp(key, "IP")){
-				strcpy(ip, value);
-				printf("ip: %s\n", ip);
-			}else if (!strcmp(key, "PORT")){
-				port = atoi(value);
-				printf("port: %d\n", port);
-			}else if (!strcmp(key, "MESSAGE")){
-				strcpy(message, value);
-				printf("message: %s\n", message);
-			}
-		}
-
-		if (ip != NULL && port != 0 && message != NULL) {
-			ret = true;
-		}
-	}
-	fclose(file);
-	return ret;
-}
-
-unsigned int getTimeInterval(unsigned int round) {
-	unsigned int ret;
-	// wait_interval = base * multiplier^n
-
-	unsigned int tmpTime = BASE_TIME_INTERVAL;
-	for (int i = 0; i < round; ++i){
-		tmpTime *= MULTIPLIER;
-	}
-
-	if (tmpTime > MAX_TIME_INTERVAL)
-		ret = MAX_TIME_INTERVAL;
-	else
-		ret = tmpTime;
-	return ret;
-}
-
-int main(int argc , char *argv[])
 {
-	printf("Enter sender.\n");
+    bool ret = false;
 
-	bool ret = -1;
+    FILE *file;
+    char line[SIZE];
+    char key[SIZE];
+    char value[SIZE];
 
-	printf("Try to read conf file.\n");
-	if (!readConf()){
-		printf("Read config file error.\n");
-		return -1;
-	}
+    file = fopen("./conf/conf.txt", "r");
+    if (file == NULL)
+    {
+        printf("fopen() config file failed.\n");
+    }
+    else
+    {
+        while (fgets(line, sizeof(line), file) != NULL)
+        {
+            memset(key, 0, SIZE);
+            memset(value, 0, SIZE);
+            if (line[0] == '#' || line[0] == '\0' || line[0] == '\n')
+            {
+                continue;
+            }
+            // printf("config file line: %s\n", line);
+            sscanf(line, "%s = %[^\n]", key, value);
+            // printf("config file key: %s, value: %s\n", key, value);
 
-	int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (sockfd == -1)
-	{
-		printf("Create socket failed.\n");
-		return -1;
-	}
+            if (!strcmp(key, "IP"))
+            {
+                strcpy(gIp, value);
+                printf("gIp: %s\n", gIp);
+            }
+            else if (!strcmp(key, "PORT"))
+            {
+                gPort = atoi(value);
+                printf("gPort: %d\n", gPort);
+            }
+            else if (!strcmp(key, "MESSAGE"))
+            {
+                strcpy(gMessage, value);
+                printf("gMessage: %s\n", gMessage);
+            }
+            else if (!strcmp(key, "MAXRETRY"))
+            {
+                gMaxRetry = atoi(value);
+                if (gMaxRetry < 10)
+                    gMaxRetry = 10;
+                printf("gMaxRetry: %d\n", gMaxRetry);
+            }
+            else
+            {
+                printf("Unknown key: %s, value: %s\n", key, value);
+            }
+        }
 
-	struct timeval timeout;
-	timeout.tv_sec = 0;
-	timeout.tv_usec = 100;
-	if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
-		printf("setsockopt() failed.\n");
-		return -1;
-	}
+        if (gIp != NULL && gPort != 0 && gMessage != NULL)
+        {
+            ret = true;
+        }
+    }
+    fclose(file);
+    return ret;
+}
 
-	struct sockaddr_in addrServer;
-	bzero(&addrServer,sizeof(addrServer));
-	addrServer.sin_family = AF_INET;
-	addrServer.sin_port = htons(port);
-	if (inet_aton(ip , &addrServer.sin_addr) == 0) 
-	{
-		fprintf(stderr, "inet_aton() failed\n");
-		return -1;
-	}
-	int addrServerLen = sizeof(addrServer);
+unsigned int getTimeInterval(unsigned int round)
+{
+    unsigned int ret;
+    // wait_interval = base * multiplier^n
 
-	int maxRetryCount = 10;
-	int round = 1;
-	while (round <= maxRetryCount){
-		printf("\nEnter round %d.\n", round);
+    unsigned int tmpTime = BASE_TIME_INTERVAL;
+    for (int i = 0; i < round; ++i)
+    {
+        tmpTime *= MULTIPLIER;
+    }
 
-		// send to server
-		if (sendto(sockfd, message, strlen(message), 0, (struct sockaddr*)&addrServer, addrServerLen) < 0) {
-			printf("sendto() failed.");
-		}
+    if (tmpTime > MAX_TIME_INTERVAL)
+        ret = MAX_TIME_INTERVAL;
+    else
+        ret = tmpTime;
+    return ret;
+}
 
-		// Receive response
-		char response[SIZE];
-		memset(response, 0, sizeof(response));
-		if (recvfrom(sockfd, response, sizeof(response), 0, (struct sockaddr*)&addrServer, &addrServerLen) < 0) {
-			printf("recvfrom() failed.\n");
-		}else {
-			printf("Get response: %s\n", response);
-			if (strcmp(response, message) == 0) {
-				printf("Response msg is equel to what we send to.", response);
-				ret = 0;
-				break;
-			}
-		}
-		
-		if (round >= maxRetryCount)
-			break;
+void *receiveThread(void *arg)
+{
+    printf("Enter receiveThread.\n");
 
-		// cal sleep time
-		unsigned int sleepTimeInt = getTimeInterval(round);
-		printf("Try to sleep %ds, round = %d\n", sleepTimeInt/1000/1000, round);
-		usleep(sleepTimeInt); // us
+    int sockfd = *((int *)arg);
 
-		round++;
-	}
+    char responseBuff[SIZE];
 
-	if (ret != 0 && round >= 10) {
-		printf("After reach max retry count, still not get equel response msg.\n");
-		ret = 1;
-	}
+    while (!gStop)
+    {
+        memset(responseBuff, 0, sizeof(responseBuff));
+        ssize_t receivedBytes = recv(sockfd, responseBuff, sizeof(responseBuff) - 1, 0);
+        if (receivedBytes > 0)
+        {
+            printf("Get response, echo message: %s\n", responseBuff);
+            gReturnValue = 0;
+            gStop = true;
+            break;
+        }
+        else if (receivedBytes == 0)
+        {
+            printf("The peer has performed an orderly shutdown.\n");
+        }
+        else
+        {
+            printf("recv() failed, error: %d.\n", errno);
+            if (errno == ECONNREFUSED)
+                printf("A remote host not running the requested service.\n");
+        }
+    }
 
-	close(sockfd);
+    pthread_exit(NULL);
+}
 
-	printf("Try to close sender, ret = %d.\n", ret);
-	return ret;
+void *sendThread(void *arg)
+{
+    printf("Enter sendThread.\n");
+
+    int sockfd = *((int *)arg);
+
+    int round = 1;
+    while (!gStop)
+    {
+        printf("\nEnter send message round: %d.\n", round);
+
+        if (send(sockfd, gMessage, sizeof(gMessage), 0) - 1 <= 0)
+            printf("send() failed.");
+
+        if (round >= gMaxRetry)
+        {
+            printf("Reach max retry count: %d.\n", gMaxRetry);
+            gReturnValue = 1;
+            gStop = true;
+            break;
+        }
+
+        unsigned int sleepTimeInt = getTimeInterval(round);
+        printf("Try to sleep %ds.\n", sleepTimeInt / 1000 / 1000);
+        usleep(sleepTimeInt);
+
+        round++;
+    }
+
+    pthread_exit(NULL);
+}
+
+int main(int argc, char *argv[])
+{
+    printf("Enter sender.\n");
+
+    bool ret = -1;
+
+    printf("Try to read conf file.\n");
+    if (!readConf())
+    {
+        printf("Read config file error.\n");
+        return -1;
+    }
+
+    int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sockfd == -1)
+    {
+        printf("Create socket failed.\n");
+        return -1;
+    }
+
+    struct sockaddr_in addrServer;
+    bzero(&addrServer, sizeof(addrServer));
+    addrServer.sin_family = AF_INET;
+    addrServer.sin_port = htons(gPort);
+    if (inet_aton(gIp, &addrServer.sin_addr) == 0)
+    {
+        fprintf(stderr, "inet_aton() failed.\n");
+        return -1;
+    }
+
+    if (connect(sockfd, (struct sockaddr *)&addrServer, sizeof(addrServer)) < 0)
+    {
+        printf("connect() failed.\n");
+        return -1;
+    }
+
+    pthread_t receiveThreadId, sendThreadId;
+    printf("Try to create receive and send thread.\n");
+    if (pthread_create(&receiveThreadId, NULL, receiveThread, (void *)&sockfd) != 0)
+    {
+        printf("pthread_create() receiveThreadId failed.\n");
+        return -1;
+    }
+
+    if (pthread_create(&sendThreadId, NULL, sendThread, (void *)&sockfd) != 0)
+    {
+        printf("pthread_create() sendThreadId failed.\n");
+        return -1;
+    }
+
+    pthread_join(receiveThreadId, NULL);
+    pthread_join(sendThreadId, NULL);
+
+    close(sockfd);
+    ret = gReturnValue;
+    printf("\nTry to close sender, return %d.\n", ret);
+    return ret;
 }
