@@ -5,7 +5,14 @@
 
 /Client/sender.c: Send a UDP message to a server and display the echo message.
 
-/Client/conf/conf.txt: Where to set server IP, port and message.
+/Client/conf/conf.txt: A text file where can set server IP, port, message and maximum retry count. (The default location should be /conf/conf.txt under the sender)
 
 # Build
-gcc -o \<out application name\> \<source c file\>
+Server: gcc -o \<listener name\> listener.c
+
+Client: gcc -pthread -o \<sender name\> sender.c
+
+# Run
+Server: ./listener -ip \<target ip\> -port \<target port\>
+
+Client: ./sender
