@@ -85,7 +85,6 @@ bool readConf()
             ret = true;
         }
     }
-    fclose(file);
     return ret;
 }
 
